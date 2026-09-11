@@ -1,4 +1,4 @@
-export default function StatCards({ stats }) {
+export default function MetricCards({ stats }) {
   if (!stats) return null;
 
   const cards = [
@@ -42,13 +42,22 @@ export default function StatCards({ stats }) {
   return (
     <div className="px-6 grid grid-cols-4 gap-4 mb-4">
       {cards.map((c) => (
-        <div key={c.label} className="bg-white rounded-xl border border-slate-200 p-4">
+        <div
+          key={c.label}
+          className="bg-white rounded-xl border border-slate-200 p-4"
+        >
           <div className="flex items-start justify-between">
-            <span className="text-xs text-slate-500 font-medium">{c.label}</span>
+            <span className="text-xs text-slate-500 font-medium">
+              {c.label}
+            </span>
             <span className="text-slate-300">{c.icon}</span>
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-1">{c.value}</div>
-          <div className={`text-xs font-medium mt-1 ${c.subColor}`}>{c.sub}</div>
+          <div className="text-2xl font-bold text-slate-900 mt-1">
+            {c.value}
+          </div>
+          <div className={`text-xs font-medium mt-1 ${c.subColor}`}>
+            {c.sub}
+          </div>
         </div>
       ))}
     </div>

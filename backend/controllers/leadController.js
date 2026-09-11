@@ -1,81 +1,109 @@
 const Lead = require("../models/Lead");
+const { parseLeadText } = require("../utils/intentAnalyzer");
 
-// 1. Fetch all non-spam leads
 exports.getLeads = async (req, res) => {
   try {
-    const leads = await Lead.find({ isSpam: false }).sort({ createdAt: -1 });
-    res.status(200).json(leads);
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error fetching leads", error: error.message });
-  }
-};
-
-// 2. Extract Leads from Manual Text
-exports.extractLeads = async (req, res) => {
-  try {
-    const { rawText } = req.body;
-    if (!rawText)
-      return res.status(400).json({ message: "Raw text is required" });
-
-    const lines = rawText.split("\n").filter((line) => line.trim() !== "");
-    const newLeads = [];
-
-    for (const line of lines) {
-      const parts = line.split(":");
-      const name = parts.length > 1 ? parts[0].trim() : "Anonymous Lead";
-      const commentSnippet =
-        parts.length > 1 ? parts.slice(1).join(":").trim() : line.trim();
-
-      // Initials calculation (e.g. "Marcus Vance" -> "MV")
-      const initials = name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
-
-      const lead = new Lead({
-        name,
-        commentSnippet,
-        avatarInitials: initials || "LD",
-        intentTier: "High Intent",
-        intentTag: "DM Requested",
-        matchScore: Math.floor(Math.random() * (99 - 85 + 1)) + 85,
-        status: "New",
-      });
-
-      const savedLead = await lead.save();
-      newLeads.push(savedLead);
+    const { status, search, intentTier } = req.query;
+    const filter = { isSpam: false };
+    if (status && status !== "All") filter.status = status;
+    if (intentTier && intentTier !== "All") filter.intentTier = intentTier;
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { title: { $regex: search, $options: "i" } },
+        { commentSnippet: { $regex: search, $options: "i" } },
+      ];
     }
-
-    res
-      .status(201)
-      .json({ message: "Leads extracted successfully", leads: newLeads });
+    res.json(await Lead.find(filter).sort({ createdAt: -1 }));
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error extracting leads", error: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// 3. Update Lead Status (New -> Contacted -> Converted)
-exports.updateLeadStatus = async (req, res) => {
+exports.getLeadStats = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const updatedLead = await Lead.findByIdAndUpdate(
-      id,
-      { status, ...(status === "Contacted" && { contactedAt: new Date() }) },
-      { new: true },
+    const totalScanned = await Lead.countDocuments({});
+    const qualified = await Lead.countDocuments({
+      intentTier: { $in: ["High Intent", "Medium Intent"] },
+    });
+    const contacted = await Lead.countDocuments({ status: "Contacted" });
+    const convertedLeads = await Lead.find({ status: "Converted" });
+    const converted = convertedLeads.length;
+    const pipelineValue = convertedLeads.reduce(
+      (sum, lead) => sum + (lead.dealValue || 0),
+      0,
     );
 
-    res.status(200).json(updatedLead);
+    res.json({
+      totalScanned,
+      qualified,
+      qualificationRate: totalScanned
+        ? +((qualified / totalScanned) * 100).toFixed(2)
+        : 0,
+      contacted,
+      outreachRate: qualified ? +((contacted / qualified) * 100).toFixed(1) : 0,
+      converted,
+      pipelineValue,
+      avgDealSize: converted ? Math.round(pipelineValue / converted) : 0,
+    });
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getLead = async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ message: "Lead not found" });
+    res.json(lead);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+exports.createLead = async (req, res) => {
+  try {
+    res.status(201).json(await Lead.create(req.body));
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+exports.extractLeads = async (req, res) => {
+  try {
+    if (!req.body.rawText?.trim())
+      return res.status(400).json({ message: "Raw text is required" });
+    const leads = await Lead.create(parseLeadText(req.body.rawText));
     res
-      .status(500)
-      .json({ message: "Error updating status", error: error.message });
+      .status(201)
+      .json({
+        message: "Leads extracted successfully",
+        leads: Array.isArray(leads) ? leads : [leads],
+      });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+exports.updateLead = async (req, res) => {
+  try {
+    const updated = await Lead.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    if (!updated) return res.status(404).json({ message: "Lead not found" });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+exports.deleteLead = async (req, res) => {
+  try {
+    const deleted = await Lead.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: "Lead not found" });
+    res.json({ message: "Lead deleted" });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
   }
 };

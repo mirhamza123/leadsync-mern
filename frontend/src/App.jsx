@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import TopNav from "./components/TopNav";
-import StatCards from "./components/StatCards";
+import Navbar from "./components/Navbar";
+import HeaderActions from "./components/HeaderActions";
+import MetricCards from "./components/MetricCards";
 import LeadTable from "./components/LeadTable";
-import QuickManualInput from "./components/QuickManualInput";
-import KeywordManager from "./components/KeywordManager";
-import { getLeads, getStats, updateLead, getKeywords } from "./api";
+import ManualInput from "./components/ManualInput";
+import KeywordTags from "./components/KeywordTags";
+import { getLeads, getStats, updateLead, getKeywords } from "./services/api";
 
 export default function App() {
   const [leads, setLeads] = useState([]);
@@ -74,44 +75,39 @@ export default function App() {
       contacted: leads.filter((l) => l.status === "Contacted").length,
       converted: leads.filter((l) => l.status === "Converted").length,
     }),
-    [leads]
+    [leads],
   );
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <TopNav />
+      <Navbar />
 
       <div className="px-6 pt-5 pb-4">
         <div className="text-xs text-slate-400 mb-2">
-          Workspaces &nbsp;›&nbsp; Q3 Outbound Growth &nbsp;›&nbsp; Post Analysis
+          Workspaces &nbsp;›&nbsp; Q3 Outbound Growth &nbsp;›&nbsp; Post
+          Analysis
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">LinkedIn Lead Intent Dashboard</h1>
+            <h1 className="text-2xl font-bold text-slate-900">
+              LinkedIn Lead Intent Dashboard
+            </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Real-time AI comment extraction, sentiment scoring, and lead qualification
+              Real-time AI comment extraction, sentiment scoring, and lead
+              qualification
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Auto-Refresh: ON (30s)
-            </span>
-            <button className="text-xs font-medium text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-slate-50">
-              🔄 Sync with HubSpot
-            </button>
-            <button className="text-xs font-medium text-white bg-blue-600 px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-blue-700">
-              ⬇ Export All to CSV
-            </button>
-          </div>
+          <HeaderActions />
         </div>
       </div>
 
       {loading ? (
-        <div className="px-6 py-10 text-slate-400 text-sm">Loading dashboard...</div>
+        <div className="px-6 py-10 text-slate-400 text-sm">
+          Loading dashboard...
+        </div>
       ) : (
         <>
-          <StatCards stats={stats} />
+          <MetricCards stats={stats} />
 
           <div className="px-6 grid grid-cols-3 gap-4 pb-8">
             <LeadTable
@@ -125,8 +121,8 @@ export default function App() {
             />
 
             <div className="flex flex-col gap-4">
-              <QuickManualInput onLeadCreated={handleLeadCreated} />
-              <KeywordManager keywords={keywords} setKeywords={setKeywords} />
+              <ManualInput onLeadCreated={handleLeadCreated} />
+              <KeywordTags keywords={keywords} setKeywords={setKeywords} />
             </div>
           </div>
         </>

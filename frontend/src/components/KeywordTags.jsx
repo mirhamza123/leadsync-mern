@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { addKeyword, removeKeyword } from "../api";
+import { addKeyword, removeKeyword } from "../services/api";
 
-export default function KeywordManager({ keywords, setKeywords }) {
+export default function KeywordTags({ keywords, setKeywords }) {
   const [newTerm, setNewTerm] = useState("");
-
   const handleAdd = async () => {
     if (!newTerm.trim()) return;
     try {
@@ -14,7 +13,6 @@ export default function KeywordManager({ keywords, setKeywords }) {
       console.error(err);
     }
   };
-
   const handleRemove = async (id) => {
     try {
       await removeKeyword(id);
@@ -28,12 +26,16 @@ export default function KeywordManager({ keywords, setKeywords }) {
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       <div className="flex items-center justify-between mb-3">
         <span className="font-semibold text-slate-800 text-sm flex items-center gap-1.5">
-          Active Intent Keywords <span className="text-slate-300 text-xs">ⓘ</span>
+          Active Intent Keywords{" "}
+          <span className="text-slate-300 text-xs">ⓘ</span>
         </span>
-        <button className="text-xs text-blue-600 font-medium">Manage Dictionary</button>
+        <button className="text-xs text-blue-600 font-medium">
+          Manage Dictionary
+        </button>
       </div>
       <p className="text-xs text-slate-500 mb-3">
-        Keywords currently triggering automated lead tagging, Slack webhook pings, and CRM sync.
+        Keywords currently triggering automated lead tagging, Slack webhook
+        pings, and CRM sync.
       </p>
       <div className="flex flex-wrap gap-2 mb-3">
         {keywords.map((k) => (
@@ -42,7 +44,10 @@ export default function KeywordManager({ keywords, setKeywords }) {
             className="bg-blue-50 text-blue-600 text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1"
           >
             {k.term} ({k.matchCount})
-            <button onClick={() => handleRemove(k._id)} className="text-blue-300 hover:text-blue-500">
+            <button
+              onClick={() => handleRemove(k._id)}
+              className="text-blue-300 hover:text-blue-500"
+            >
               ✕
             </button>
           </span>

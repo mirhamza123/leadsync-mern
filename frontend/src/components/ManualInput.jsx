@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { createLead } from "../api";
+import { createLead } from "../services/api";
 
-export default function QuickManualInput({ onLeadCreated }) {
+export default function ManualInput({ onLeadCreated }) {
   const [raw, setRaw] = useState("");
   const [enrich, setEnrich] = useState(true);
   const [filterSpam, setFilterSpam] = useState(true);
@@ -11,14 +11,18 @@ export default function QuickManualInput({ onLeadCreated }) {
     if (!raw.trim()) return;
     setLoading(true);
     try {
-      // naive parse: "Name: comment"
       const [namePart, ...rest] = raw.split(":");
       const name = namePart.trim() || "Unknown Lead";
-      const commentSnippet = rest.join(":").trim().slice(0, 80) || raw.slice(0, 80);
-
+      const commentSnippet =
+        rest.join(":").trim().slice(0, 80) || raw.slice(0, 80);
       const { data } = await createLead({
         name,
-        avatarInitials: name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
+        avatarInitials: name
+          .split(" ")
+          .map((w) => w[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase(),
         commentSnippet,
         intentTier: "Medium Intent",
         intentTag: "Manual Entry",
@@ -39,11 +43,16 @@ export default function QuickManualInput({ onLeadCreated }) {
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       <div className="flex items-center gap-2 mb-1">
         <span className="text-blue-600">✨</span>
-        <span className="font-semibold text-slate-800 text-sm">Quick Manual Input</span>
+        <span className="font-semibold text-slate-800 text-sm">
+          Quick Manual Input
+        </span>
       </div>
-      <p className="text-xs text-slate-400 mb-3">Chrome extension fallback parser</p>
+      <p className="text-xs text-slate-400 mb-3">
+        Chrome extension fallback parser
+      </p>
       <p className="text-xs text-slate-500 mb-2">
-        Paste raw LinkedIn post comments or API exports if not using the automated background session:
+        Paste raw LinkedIn post comments or API exports if not using the
+        automated background session:
       </p>
       <textarea
         value={raw}
@@ -52,11 +61,21 @@ export default function QuickManualInput({ onLeadCreated }) {
         placeholder="e.g. John Doe: 'Interested in a demo, please send pricing details to my DM...'"
       />
       <label className="flex items-center gap-2 text-xs text-slate-500 mb-2">
-        <input type="checkbox" checked={enrich} onChange={() => setEnrich(!enrich)} className="rounded" />
+        <input
+          type="checkbox"
+          checked={enrich}
+          onChange={() => setEnrich(!enrich)}
+          className="rounded"
+        />
         Auto-enrich company domain via Clearbit
       </label>
       <label className="flex items-center gap-2 text-xs text-slate-500 mb-3">
-        <input type="checkbox" checked={filterSpam} onChange={() => setFilterSpam(!filterSpam)} className="rounded" />
+        <input
+          type="checkbox"
+          checked={filterSpam}
+          onChange={() => setFilterSpam(!filterSpam)}
+          className="rounded"
+        />
         Filter spam / bot "CFBR" comments
       </label>
       <button

@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "LeadSync LinkedIn Lead Capture",
+  "version": "1.0.0",
+  "description": "Capture LinkedIn comments for LeadSync lead qualification.",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["http://localhost:5000/*"],
+  "action": {
+    "default_title": "LeadSync",
+    "default_popup": "popup.html"
+  }
+}

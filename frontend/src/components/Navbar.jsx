@@ -1,6 +1,6 @@
 import logo from "../assets/leadsync-logo.png";
 
-export default function TopNav() {
+export default function Navbar() {
   return (
     <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
       <div className="flex items-center gap-6">
