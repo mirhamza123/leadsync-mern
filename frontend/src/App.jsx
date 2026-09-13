@@ -5,7 +5,14 @@ import MetricCards from "./components/MetricCards";
 import LeadTable from "./components/LeadTable";
 import ManualInput from "./components/ManualInput";
 import KeywordTags from "./components/KeywordTags";
-import { getLeads, getStats, updateLead, getKeywords } from "./services/api";
+import {
+  clearAllLeads,
+  deleteLead,
+  getKeywords,
+  getLeads,
+  getStats,
+  updateLead,
+} from "./services/api";
 
 export default function App() {
   const [leads, setLeads] = useState([]);
@@ -54,6 +61,38 @@ export default function App() {
 
   const handleLeadCreated = (lead) => {
     setLeads((prev) => [lead, ...prev]);
+  };
+
+  const handleDeleteLead = async (lead) => {
+    try {
+      await deleteLead(lead._id);
+      setLeads((prev) => prev.filter((item) => item._id !== lead._id));
+      const { data } = await getStats();
+      setStats(data);
+    } catch (err) {
+      console.error("Failed to delete lead", err);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm("Are you sure you want to delete all leads?")) return;
+
+    try {
+      await clearAllLeads();
+      setLeads([]);
+      setStats({
+        totalScanned: 0,
+        qualified: 0,
+        qualificationRate: 0,
+        contacted: 0,
+        outreachRate: 0,
+        converted: 0,
+        pipelineValue: 0,
+        avgDealSize: 0,
+      });
+    } catch (err) {
+      console.error("Failed to clear leads", err);
+    }
   };
 
   const filteredLeads = useMemo(() => {
@@ -118,6 +157,8 @@ export default function App() {
               setSearch={setSearch}
               counts={counts}
               onPushToCrm={handlePushToCrm}
+              onDeleteLead={handleDeleteLead}
+              onClearAll={handleClearAll}
             />
 
             <div className="flex flex-col gap-4">

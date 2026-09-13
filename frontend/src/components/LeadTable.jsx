@@ -27,6 +27,8 @@ export default function LeadTable({
   setSearch,
   counts,
   onPushToCrm,
+  onDeleteLead,
+  onClearAll,
 }) {
   return (
     <div className="col-span-2 bg-white rounded-xl border border-slate-200 p-4">
@@ -36,6 +38,7 @@ export default function LeadTable({
         search={search}
         setSearch={setSearch}
         counts={counts}
+        onClearAll={onClearAll}
       />
 
       <table className="w-full text-sm">
@@ -117,18 +120,29 @@ export default function LeadTable({
                 )}
               </td>
               <td className="py-3 text-right pr-1">
-                {lead.status === "New" ? (
+                <div className="flex items-center justify-end gap-2">
+                  {lead.status === "New" ? (
+                    <button
+                      onClick={() => onPushToCrm(lead)}
+                      className="text-xs bg-blue-600 text-white font-semibold px-3 py-1.5 rounded-md hover:bg-blue-700"
+                    >
+                      Push to CRM
+                    </button>
+                  ) : (
+                    <button className="text-xs text-slate-500 border border-slate-200 font-semibold px-3 py-1.5 rounded-md hover:bg-slate-50">
+                      {lead.status === "Converted" ? "View Opp" : "View Thread"}
+                    </button>
+                  )}
                   <button
-                    onClick={() => onPushToCrm(lead)}
-                    className="text-xs bg-blue-600 text-white font-semibold px-3 py-1.5 rounded-md hover:bg-blue-700"
+                    type="button"
+                    onClick={() => onDeleteLead(lead)}
+                    aria-label={`Delete ${lead.name}`}
+                    title="Delete lead"
+                    className="text-slate-400 hover:text-red-600 text-lg leading-none px-1"
                   >
-                    Push to CRM
+                    ✕
                   </button>
-                ) : (
-                  <button className="text-xs text-slate-500 border border-slate-200 font-semibold px-3 py-1.5 rounded-md hover:bg-slate-50">
-                    {lead.status === "Converted" ? "View Opp" : "View Thread"}
-                  </button>
-                )}
+                </div>
               </td>
             </tr>
           ))}

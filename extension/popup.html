@@ -31,6 +31,14 @@
         color: white;
         cursor: pointer;
       }
+      button.secondary {
+        margin-top: 8px;
+        background: #475569;
+      }
+      button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
       #status {
         min-height: 18px;
         color: #64748b;
@@ -39,8 +47,13 @@
   </head>
   <body>
     <strong>LeadSync</strong>
+    <button id="auto-extract" type="button">
+      ⚡ Auto Extract Page Comments
+    </button>
     <textarea id="comments" placeholder="Paste LinkedIn comments..."></textarea>
-    <button id="capture" type="button">Send to LeadSync</button>
+    <button id="manual-send" class="secondary" type="button">
+      Send Manual Text
+    </button>
     <p id="status" role="status"></p>
     <script src="popup.js"></script>
   </body>

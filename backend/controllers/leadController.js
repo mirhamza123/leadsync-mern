@@ -85,15 +85,28 @@ exports.createLead = async (req, res) => {
 
 exports.extractLeads = async (req, res) => {
   try {
-    if (!req.body.rawText?.trim())
-      return res.status(400).json({ message: "Raw text is required" });
-    const parsedLeads = parseLeadText(req.body.rawText);
-    const leads = await Lead.create(
-      parsedLeads.map((lead) => ({
+    let parsedLeads = req.body.structuredLeads;
+    if (!Array.isArray(parsedLeads)) {
+      if (!req.body.rawText?.trim()) {
+        return res.status(400).json({ message: "Raw text is required" });
+      }
+      parsedLeads = await parseWithGemini(req.body.rawText);
+    }
+
+    const validLeads = parsedLeads.filter(
+      (lead) => lead?.name?.trim() && lead?.commentSnippet?.trim(),
+    );
+    if (!validLeads.length) {
+      return res.status(400).json({ message: "No valid leads found" });
+    }
+
+    const leads = await Lead.insertMany(
+      validLeads.map((lead) => ({
         name: lead.name,
-        title: lead.headline,
+        title: lead.headline || lead.title || "",
         commentSnippet: lead.commentSnippet,
-        intentTier: lead.intentScore,
+        intentTier:
+          lead.intentScore || analyzeIntent(lead.commentSnippet).intentTier,
         intentTag: analyzeIntent(lead.commentSnippet).intentTag,
         matchScore: analyzeIntent(lead.commentSnippet).matchScore,
         avatarInitials: lead.name
@@ -115,6 +128,59 @@ exports.extractLeads = async (req, res) => {
   }
 };
 
+async function parseWithGemini(rawText) {
+  if (!process.env.GEMINI_API_KEY) {
+    return parseLeadText(rawText).map((lead) => ({
+      name: lead.name,
+      headline: lead.headline,
+      commentSnippet: lead.commentSnippet,
+      intentScore: lead.intentScore,
+    }));
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: `Parse these copied LinkedIn comments into qualified leads. Omit spam, reactions, system labels, bots, and entries without a real full name or comment. Return only the structured JSON array.\n\n${rawText}`,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                name: { type: "STRING" },
+                headline: { type: "STRING" },
+                commentSnippet: { type: "STRING" },
+                intentScore: {
+                  type: "STRING",
+                  enum: ["High Intent", "Medium Intent", "Low Intent"],
+                },
+              },
+              required: ["name", "headline", "commentSnippet", "intentScore"],
+            },
+          },
+        },
+      }),
+    },
+  );
+  if (!response.ok)
+    throw new Error(`Gemini request failed (${response.status})`);
+  const data = await response.json();
+  return JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
+}
+
 exports.updateLead = async (req, res) => {
   try {
     const updated = await Lead.findByIdAndUpdate(req.params.id, req.body, {
@@ -135,5 +201,17 @@ exports.deleteLead = async (req, res) => {
     res.json({ message: "Lead deleted" });
   } catch (error) {
     res.status(400).json({ message: error.message });
+  }
+};
+
+exports.clearAllLeads = async (req, res) => {
+  try {
+    const result = await Lead.deleteMany({});
+    res.json({
+      message: "All leads deleted",
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };

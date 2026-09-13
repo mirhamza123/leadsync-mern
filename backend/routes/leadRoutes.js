@@ -7,6 +7,7 @@ router.get("/stats", controller.getLeadStats);
 router.get("/", controller.getLeads);
 router.post("/extract", controller.extractLeads);
 router.post("/", controller.createLead);
+router.delete("/clear-all", controller.clearAllLeads);
 router.get("/:id", controller.getLead);
 router.patch("/:id", controller.updateLead);
 router.delete("/:id", controller.deleteLead);
