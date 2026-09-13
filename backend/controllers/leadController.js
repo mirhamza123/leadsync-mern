@@ -1,10 +1,13 @@
 const Lead = require("../models/Lead");
-const { parseLeadText } = require("../utils/intentAnalyzer");
+const { analyzeIntent, parseLeadText } = require("../utils/intentAnalyzer");
 
 exports.getLeads = async (req, res) => {
   try {
     const { status, search, intentTier } = req.query;
-    const filter = { isSpam: false };
+    const filter = {
+      isSpam: false,
+      commentSnippet: { $exists: true, $ne: "" },
+    };
     if (status && status !== "All") filter.status = status;
     if (intentTier && intentTier !== "All") filter.intentTier = intentTier;
     if (search) {
@@ -22,12 +25,23 @@ exports.getLeads = async (req, res) => {
 
 exports.getLeadStats = async (req, res) => {
   try {
-    const totalScanned = await Lead.countDocuments({});
+    const validLeadFilter = {
+      isSpam: false,
+      commentSnippet: { $exists: true, $ne: "" },
+    };
+    const totalScanned = await Lead.countDocuments(validLeadFilter);
     const qualified = await Lead.countDocuments({
+      ...validLeadFilter,
       intentTier: { $in: ["High Intent", "Medium Intent"] },
     });
-    const contacted = await Lead.countDocuments({ status: "Contacted" });
-    const convertedLeads = await Lead.find({ status: "Converted" });
+    const contacted = await Lead.countDocuments({
+      ...validLeadFilter,
+      status: "Contacted",
+    });
+    const convertedLeads = await Lead.find({
+      ...validLeadFilter,
+      status: "Converted",
+    });
     const converted = convertedLeads.length;
     const pipelineValue = convertedLeads.reduce(
       (sum, lead) => sum + (lead.dealValue || 0),
@@ -73,13 +87,29 @@ exports.extractLeads = async (req, res) => {
   try {
     if (!req.body.rawText?.trim())
       return res.status(400).json({ message: "Raw text is required" });
-    const leads = await Lead.create(parseLeadText(req.body.rawText));
-    res
-      .status(201)
-      .json({
-        message: "Leads extracted successfully",
-        leads: Array.isArray(leads) ? leads : [leads],
-      });
+    const parsedLeads = parseLeadText(req.body.rawText);
+    const leads = await Lead.create(
+      parsedLeads.map((lead) => ({
+        name: lead.name,
+        title: lead.headline,
+        commentSnippet: lead.commentSnippet,
+        intentTier: lead.intentScore,
+        intentTag: analyzeIntent(lead.commentSnippet).intentTag,
+        matchScore: analyzeIntent(lead.commentSnippet).matchScore,
+        avatarInitials: lead.name
+          .split(/\s+/)
+          .map((part) => part[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2),
+        status: "New",
+        isSpam: false,
+      })),
+    );
+    res.status(201).json({
+      message: "Leads extracted successfully",
+      leads: Array.isArray(leads) ? leads : [leads],
+    });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

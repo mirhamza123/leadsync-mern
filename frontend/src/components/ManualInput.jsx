@@ -1,39 +1,30 @@
 import { useState } from "react";
-import { createLead } from "../services/api";
+import { extractLeads } from "../services/api";
 
 export default function ManualInput({ onLeadCreated }) {
   const [raw, setRaw] = useState("");
   const [enrich, setEnrich] = useState(true);
   const [filterSpam, setFilterSpam] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleExtract = async () => {
     if (!raw.trim()) return;
     setLoading(true);
+    setError("");
     try {
-      const [namePart, ...rest] = raw.split(":");
-      const name = namePart.trim() || "Unknown Lead";
-      const commentSnippet =
-        rest.join(":").trim().slice(0, 80) || raw.slice(0, 80);
-      const { data } = await createLead({
-        name,
-        avatarInitials: name
-          .split(" ")
-          .map((w) => w[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase(),
-        commentSnippet,
-        intentTier: "Medium Intent",
-        intentTag: "Manual Entry",
-        matchScore: 75,
-        status: "New",
-        isSpam: false,
-      });
-      onLeadCreated?.(data);
+      const { data } = await extractLeads(raw);
+      if (!data.leads.length) {
+        setError("No valid commenter and comment found in the pasted text.");
+        return;
+      }
+      data.leads.forEach((lead) => onLeadCreated?.(lead));
       setRaw("");
     } catch (err) {
-      console.error(err);
+      setError(
+        err.response?.data?.message ||
+          "Could not extract this comment. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -85,6 +76,7 @@ export default function ManualInput({ onLeadCreated }) {
       >
         ⚡ {loading ? "Extracting..." : "Extract Leads Now"}
       </button>
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </div>
   );
 }

@@ -14,7 +14,72 @@ const INTENT_RULES = [
     tier: "High Intent",
     keywords: ["demo", "demonstration", "walkthrough"],
   },
+  {
+    tag: "Active Interest",
+    tier: "Medium Intent",
+    keywords: ["interested in", "looking for", "evaluating", "seeking"],
+  },
 ];
+
+const NOISE_LINES = new Set([
+  "key skills",
+  "note",
+  "follow",
+  "see more comments",
+  "reactions",
+  "like",
+  "reply",
+]);
+
+const SPAM_PATTERNS = [/^cfbr!?$/i, /^interested!?$/i, /^following!?$/i];
+const TITLE_WORDS = new Set([
+  "ceo",
+  "cto",
+  "designer",
+  "developer",
+  "engineer",
+  "founder",
+  "manager",
+  "director",
+  "consultant",
+  "marketing",
+  "sales",
+  "software",
+]);
+
+function isNoiseLine(line) {
+  const normalized = line.trim().toLowerCase();
+  return (
+    !normalized ||
+    NOISE_LINES.has(normalized) ||
+    /^\d+\s*(mo|m|h|d|w|y)s?$/i.test(normalized) ||
+    /^\d+\s*(reaction|reactions|like|likes)$/i.test(normalized)
+  );
+}
+
+function isSpamComment(comment) {
+  return SPAM_PATTERNS.some((pattern) => pattern.test(comment.trim()));
+}
+
+function looksLikeName(line) {
+  const words = line.trim().split(/\s+/);
+  const normalizedWords = words.map((word) => word.toLowerCase());
+  return (
+    words.length >= 2 &&
+    words.length <= 5 &&
+    !/[?!.,:;|@]/.test(line) &&
+    !normalizedWords.some((word) => TITLE_WORDS.has(word)) &&
+    words.every((word) => /^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/.test(word))
+  );
+}
+
+function cleanComment(lines) {
+  return lines
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .replace(/^['\"]|['\"]$/g, "")
+    .trim();
+}
 
 function analyzeIntent(comment = "") {
   const normalized = comment.toLowerCase();
@@ -24,14 +89,16 @@ function analyzeIntent(comment = "") {
 
   if (!match) {
     return {
-      intentTier: "Medium Intent",
+      intentTier: "Low Intent",
+      intentScore: "Low Intent",
       intentTag: "Manual Entry",
-      matchScore: 75,
+      matchScore: 50,
     };
   }
 
   return {
     intentTier: match.tier,
+    intentScore: match.tier,
     intentTag: match.tag,
     matchScore: Math.min(
       99,
@@ -45,30 +112,43 @@ function analyzeIntent(comment = "") {
 
 function parseLeadText(rawText = "") {
   return rawText
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const separatorIndex = line.indexOf(":");
-      const name =
-        separatorIndex >= 0
-          ? line.slice(0, separatorIndex).trim()
-          : "Anonymous Lead";
-      const commentSnippet =
-        separatorIndex >= 0 ? line.slice(separatorIndex + 1).trim() : line;
-      const avatarInitials = name
-        .split(/\s+/)
-        .map((part) => part[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
+    .split(/\r?\n\s*\r?\n/)
+    .map((block) =>
+      block
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    )
+    .flatMap((block) => {
+      const lines = block.filter((line) => !isNoiseLine(line));
+      if (!lines.length) return [];
 
-      return {
-        name,
-        commentSnippet,
-        avatarInitials: avatarInitials || "LD",
-        ...analyzeIntent(commentSnippet),
-      };
+      const inlineSeparator = lines[0].indexOf(":");
+      const inlineName =
+        inlineSeparator > 0 ? lines[0].slice(0, inlineSeparator).trim() : "";
+      const nameIndex =
+        inlineName && looksLikeName(inlineName)
+          ? 0
+          : lines.findIndex(looksLikeName);
+      if (nameIndex < 0) return [];
+
+      const name = inlineName || lines[nameIndex];
+      const remaining = inlineName
+        ? [lines[0].slice(inlineSeparator + 1).trim(), ...lines.slice(1)]
+        : lines.slice(nameIndex + 1);
+      const content = remaining.filter((line) => !isNoiseLine(line));
+      const headline = inlineName ? "" : content.shift() || "";
+      const commentSnippet = cleanComment(content);
+      if (!commentSnippet || isSpamComment(commentSnippet)) return [];
+
+      return [
+        {
+          name,
+          headline,
+          commentSnippet,
+          intentScore: analyzeIntent(commentSnippet).intentTier,
+        },
+      ];
     });
 }
 
