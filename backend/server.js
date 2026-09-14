@@ -2,6 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const connectDB = require("./config/db");
+const Lead = require("./models/Lead");
+const { analyzeIntent, parseLeadText } = require("./utils/intentAnalyzer");
 
 const leadRoutes = require("./routes/leadRoutes");
 const keywordRoutes = require("./routes/keywordRoutes");
@@ -10,37 +12,66 @@ const app = express();
 
 connectDB();
 
-const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-if (process.env.NODE_ENV !== "production") {
-  allowedOrigins.push("http://localhost:5173", "http://127.0.0.1:5173");
-}
-
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (
-        !origin ||
-        allowedOrigins.includes(origin) ||
-        origin.startsWith("chrome-extension://")
-      ) {
-        return callback(null, true);
-      }
-
-      return callback(null, false);
-    },
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    optionsSuccessStatus: 204,
-  }),
-);
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 app.get("/", (req, res) => {
   res.json({ status: "LeadSync API running" });
+});
+
+app.post("/api/leads/extract", async (req, res) => {
+  try {
+    const { structuredLeads, rawText } = req.body || {};
+    const parsedLeads = Array.isArray(structuredLeads)
+      ? structuredLeads
+      : parseLeadText(typeof rawText === "string" ? rawText : "");
+    const validLeads = parsedLeads.filter(
+      (lead) => lead?.name?.trim() && lead?.commentSnippet?.trim(),
+    );
+
+    if (!validLeads.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid leads found",
+        count: 0,
+      });
+    }
+
+    const documents = validLeads.map((lead) => {
+      const intent = analyzeIntent(lead.commentSnippet);
+      return {
+        name: lead.name.trim(),
+        title: (lead.headline || lead.title || "").trim(),
+        commentSnippet: lead.commentSnippet.trim(),
+        intentTier: intent.intentTier,
+        intentTag: intent.intentTag,
+        matchScore: intent.matchScore,
+        avatarInitials: lead.name
+          .trim()
+          .split(/\s+/)
+          .map((part) => part[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2),
+        status: "New",
+        isSpam: false,
+      };
+    });
+    const savedLeads = await Lead.insertMany(documents);
+    return res.status(201).json({
+      success: true,
+      message: `${savedLeads.length} lead(s) extracted successfully`,
+      count: savedLeads.length,
+      leads: savedLeads,
+    });
+  } catch (error) {
+    console.error("Lead extraction failed:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to save leads",
+      count: 0,
+    });
+  }
 });
 
 app.use("/api/leads", leadRoutes);

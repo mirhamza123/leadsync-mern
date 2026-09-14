@@ -1,17 +1,23 @@
 const API_URL = "http://localhost:5000/api/leads/extract";
-const comments = document.querySelector("#comments");
+const rawInput = document.querySelector("#rawInput, #comments");
 const autoExtractButton = document.querySelector("#auto-extract");
 const manualSendButton = document.querySelector("#manual-send");
 const status = document.querySelector("#status");
 
 function setBusy(isBusy) {
-  autoExtractButton.disabled = isBusy;
-  manualSendButton.disabled = isBusy;
+  if (autoExtractButton) autoExtractButton.disabled = isBusy;
+  if (manualSendButton) manualSendButton.disabled = isBusy;
+}
+
+function setStatus(message, isError = false) {
+  if (!status) return;
+  status.textContent = message;
+  status.style.color = isError ? "#b91c1c" : "#15803d";
 }
 
 async function sendLeads(payload) {
   setBusy(true);
-  status.textContent = "Sending...";
+  setStatus("Sending...");
   try {
     const response = await fetch(API_URL, {
       method: "POST",
@@ -20,10 +26,14 @@ async function sendLeads(payload) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || "Request failed");
-    status.textContent = `${data.leads.length} lead(s) captured.`;
+    setStatus(data.message || `${data.count || 0} lead(s) captured.`);
     return true;
   } catch (error) {
-    status.textContent = `Error: ${error.message}. Check that LeadSync API is running and CORS is allowed.`;
+    const networkHint =
+      error instanceof TypeError
+        ? " Check that the LeadSync API is running on Port 5000 and CORS is allowed."
+        : "";
+    setStatus(`Error: ${error.message}.${networkHint}`, true);
     return false;
   } finally {
     setBusy(false);
@@ -31,32 +41,53 @@ async function sendLeads(payload) {
 }
 
 autoExtractButton.addEventListener("click", async () => {
-  status.textContent = "Reading LinkedIn comments...";
+  setStatus("Reading LinkedIn comments...");
   try {
     const [tab] = await chrome.tabs.query({
       active: true,
       currentWindow: true,
     });
-    if (!tab?.id || !tab.url?.includes("linkedin.com")) {
-      throw new Error("Open a LinkedIn page first");
+
+    if (!tab?.id || !tab.url || !tab.url.includes("linkedin.com")) {
+      throw new Error("Open a active LinkedIn page first");
     }
 
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "SCRAPE_PAGE",
-    });
-    if (!response?.leads?.length)
-      throw new Error("No comments found on this page");
-    await sendLeads({ structuredLeads: response.leads });
+    chrome.tabs.sendMessage(
+      tab.id,
+      { action: "SCRAPE_PAGE" },
+      async (response) => {
+        if (chrome.runtime.lastError) {
+          setStatus(
+            "Error: Refresh the LinkedIn page (F5) and try again.",
+            true,
+          );
+          return;
+        }
+
+        if (!response?.leads?.length) {
+          setStatus(
+            "Error: No comments found on this page. Scroll down to load comments.",
+            true,
+          );
+          return;
+        }
+
+        await sendLeads({ structuredLeads: response.leads });
+      },
+    );
   } catch (error) {
-    status.textContent = `Error: ${error.message}. Refresh the LinkedIn page if needed.`;
+    setStatus(
+      `Error: ${error.message || "Could not connect to the LinkedIn page"}. Refresh the page and try again.`,
+      true,
+    );
   }
 });
 
 manualSendButton.addEventListener("click", async () => {
-  const rawText = comments.value.trim();
+  const rawText = rawInput?.value.trim() || "";
   if (!rawText) {
-    status.textContent = "Paste at least one comment first.";
+    setStatus("Paste at least one comment first.", true);
     return;
   }
-  if (await sendLeads({ rawText })) comments.value = "";
+  if ((await sendLeads({ rawText })) && rawInput) rawInput.value = "";
 });

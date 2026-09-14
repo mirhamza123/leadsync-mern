@@ -69,6 +69,7 @@ function looksLikeName(line) {
     words.length <= 5 &&
     !/[?!.,:;|@]/.test(line) &&
     !normalizedWords.some((word) => TITLE_WORDS.has(word)) &&
+    words.every((word) => /^[A-ZÀ-ÖØ-Þ]/.test(word)) &&
     words.every((word) => /^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/.test(word))
   );
 }
@@ -79,6 +80,35 @@ function cleanComment(lines) {
     .replace(/\s+/g, " ")
     .replace(/^['\"]|['\"]$/g, "")
     .trim();
+}
+
+function parseInlineRecord(line) {
+  const value = line.trim();
+  if (!value || isNoiseLine(value)) return null;
+
+  const tokens = value.split(/\s+/);
+  for (
+    let nameLength = 2;
+    nameLength <= Math.min(5, tokens.length - 1);
+    nameLength += 1
+  ) {
+    const nameTokens = tokens.slice(0, nameLength);
+    const name = nameTokens.join(" ");
+    if (!looksLikeName(name)) continue;
+
+    let remainder = tokens.slice(nameLength).join(" ");
+    remainder = remainder.replace(/^\d+(?:st|nd|rd|th)\+?/i, "").trim();
+    if (!remainder || isNoiseLine(remainder) || isSpamComment(remainder))
+      return null;
+
+    return {
+      name,
+      headline: "",
+      commentSnippet: remainder,
+      intentScore: analyzeIntent(remainder).intentTier,
+    };
+  }
+  return null;
 }
 
 function analyzeIntent(comment = "") {
@@ -111,8 +141,20 @@ function analyzeIntent(comment = "") {
 }
 
 function parseLeadText(rawText = "") {
-  return rawText
+  // LinkedIn often pastes the degree badge and adjacent profile text without spaces.
+  const normalizedText = rawText
+    .replace(/\s*[•·|]?\s*\d+(?:st|nd|rd|th)\+?\s*/gi, "\n")
+    .replace(/[ \t]+/g, " ");
+
+  const inlineLeads = normalizedText
+    .split(/\r?\n/)
+    .map(parseInlineRecord)
+    .filter(Boolean);
+  const parsedLeads = normalizedText
     .split(/\r?\n\s*\r?\n/)
+    .filter(
+      (block) => !block.split(/\r?\n/).some((line) => parseInlineRecord(line)),
+    )
     .map((block) =>
       block
         .split(/\r?\n/)
@@ -136,8 +178,20 @@ function parseLeadText(rawText = "") {
       const remaining = inlineName
         ? [lines[0].slice(inlineSeparator + 1).trim(), ...lines.slice(1)]
         : lines.slice(nameIndex + 1);
-      const content = remaining.filter((line) => !isNoiseLine(line));
-      const headline = inlineName ? "" : content.shift() || "";
+      const repeatedNamePrefix = remaining[0]
+        ?.toLowerCase()
+        .startsWith(`${name.toLowerCase()} `)
+        ? remaining[0].slice(name.length).trim()
+        : "";
+      const content = (
+        repeatedNamePrefix
+          ? [repeatedNamePrefix, ...remaining.slice(1)]
+          : remaining
+      )
+        .filter((line) => !isNoiseLine(line))
+        .filter((line) => line.toLowerCase() !== name.toLowerCase());
+      const headline =
+        inlineName || repeatedNamePrefix ? "" : content.shift() || "";
       const commentSnippet = cleanComment(content);
       if (!commentSnippet || isSpamComment(commentSnippet)) return [];
 
@@ -150,6 +204,15 @@ function parseLeadText(rawText = "") {
         },
       ];
     });
+
+  parsedLeads.push(...inlineLeads);
+
+  const uniqueLeads = new Map();
+  parsedLeads.forEach((lead) => {
+    const key = lead.name.trim().toLowerCase();
+    if (!uniqueLeads.has(key)) uniqueLeads.set(key, lead);
+  });
+  return [...uniqueLeads.values()];
 }
 
 module.exports = { analyzeIntent, parseLeadText };

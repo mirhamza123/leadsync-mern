@@ -3,16 +3,26 @@
   "name": "LeadSync LinkedIn Lead Capture",
   "version": "1.0.0",
   "description": "Capture LinkedIn comments for LeadSync lead qualification.",
-  "permissions": ["activeTab", "storage"],
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs",
+    "scripting"
+  ],
   "host_permissions": [
     "http://localhost:5000/*",
-    "https://www.linkedin.com/*",
+    "https://*.linkedin.com/*",
     "https://linkedin.com/*"
   ],
   "content_scripts": [
     {
-      "matches": ["https://www.linkedin.com/*", "https://linkedin.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://*.linkedin.com/*",
+        "https://linkedin.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
