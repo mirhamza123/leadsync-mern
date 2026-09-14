@@ -140,10 +140,9 @@ function scrapeComments() {
     if (lead) leads.push(lead);
   });
 
-  // Strategy 2: Targeted comment section profile links scanning
-  const commentSectionLinks = document.querySelectorAll(
-    ".comments-comment-item a[href*='/in/'], .comments-comment-entity a[href*='/in/']",
-  );
+  // Strategy 2: Scan every visible profile link because LinkedIn changes
+  // comment wrapper classes frequently.
+  const commentSectionLinks = document.querySelectorAll("a[href*='/in/']");
 
   commentSectionLinks.forEach((profileLink) => {
     const lead =

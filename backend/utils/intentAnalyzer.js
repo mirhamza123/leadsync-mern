@@ -46,6 +46,17 @@ const TITLE_WORDS = new Set([
   "sales",
   "software",
 ]);
+const NON_NAME_STARTS = new Set([
+  "i",
+  "we",
+  "this",
+  "that",
+  "thank",
+  "thanks",
+  "congratulations",
+  "looking",
+  "interested",
+]);
 
 function isNoiseLine(line) {
   const normalized = line.trim().toLowerCase();
@@ -69,7 +80,8 @@ function looksLikeName(line) {
     words.length <= 5 &&
     !/[?!.,:;|@]/.test(line) &&
     !normalizedWords.some((word) => TITLE_WORDS.has(word)) &&
-    words.every((word) => /^[A-ZÀ-ÖØ-Þ]/.test(word)) &&
+    !NON_NAME_STARTS.has(normalizedWords[0]) &&
+    /^[A-ZÀ-ÖØ-Þ]/.test(words[0]) &&
     words.every((word) => /^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/.test(word))
   );
 }
@@ -191,7 +203,9 @@ function parseLeadText(rawText = "") {
         .filter((line) => !isNoiseLine(line))
         .filter((line) => line.toLowerCase() !== name.toLowerCase());
       const headline =
-        inlineName || repeatedNamePrefix ? "" : content.shift() || "";
+        inlineName || repeatedNamePrefix || content.length === 1
+          ? ""
+          : content.shift() || "";
       const commentSnippet = cleanComment(content);
       if (!commentSnippet || isSpamComment(commentSnippet)) return [];
 
