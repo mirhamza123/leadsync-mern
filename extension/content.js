@@ -53,6 +53,11 @@ function getViewportScore(element) {
 function findActiveCommentContainer() {
   const candidates = [];
   document.querySelectorAll(COMMENT_CONTAINER_SELECTOR).forEach((element) => {
+    const containsCommentItems =
+      element.matches(COMMENT_SELECTOR) ||
+      element.querySelector(COMMENT_SELECTOR);
+    if (!containsCommentItems) return;
+
     const score = getViewportScore(element);
     if (score !== null) candidates.push({ element, score });
   });
