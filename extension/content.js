@@ -21,6 +21,9 @@ function cleanText(value = "") {
 
 function cleanName(value = "") {
   return cleanText(value)
+    .replace(/^(?:view|go to)\s+/i, "")
+    .replace(/['’]s\s+profile.*$/i, "")
+    .replace(/\s*[,|]\s*open to work.*$/i, "")
     .replace(
       /\s*[•|·]\s*(?:\d+(?:st|nd|rd|th)\+?|follow(?:ing)?|reply).*$/i,
       "",
@@ -120,7 +123,7 @@ function findFallbackCommentNodes(targetPost) {
       if (
         (current.querySelector(BODY_SELECTOR) ||
           current.querySelector(BODY_FALLBACK_SELECTOR)) &&
-        current.querySelector(NAME_SELECTORS)
+        getViewportScore(current) !== null
       ) {
         nodes.add(current);
         break;
@@ -160,10 +163,7 @@ function extractComment(commentNode) {
   return { authorName, text };
 }
 
-function scrapeComments() {
-  const targetContainer = findActiveCommentContainer() || findActivePost();
-  if (!targetContainer) return [];
-
+function extractFromContainer(targetContainer) {
   const seen = new Set();
   const leads = [];
   const comments = new Set(targetContainer.querySelectorAll(COMMENT_SELECTOR));
@@ -182,6 +182,18 @@ function scrapeComments() {
   });
 
   return leads;
+}
+
+function scrapeComments() {
+  const activeContainer = findActiveCommentContainer();
+  const scopedLeads = activeContainer
+    ? extractFromContainer(activeContainer)
+    : [];
+  if (scopedLeads.length) return scopedLeads;
+
+  const activePost = findActivePost();
+  if (!activePost || activePost === activeContainer) return [];
+  return extractFromContainer(activePost);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
