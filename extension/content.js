@@ -1,5 +1,6 @@
 const COMMENT_CONTAINER_SELECTOR =
   ".comments-comments-list, .comments-comment-box, div.comments-comment-list__container";
+const POST_SELECTOR = ".feed-shared-update-v2, div.occludable-update, article";
 const COMMENT_SELECTOR =
   ".comments-comment-item, article.comments-comment-item, div.comments-comment-entity";
 const NAME_SELECTORS =
@@ -64,18 +65,72 @@ function findActiveCommentContainer() {
       ),
   );
 
-  return (
+  const activeContainer =
     topLevelCandidates.reduce(
       (active, candidate) =>
         !active || candidate.score > active.score ? candidate : active,
       null,
-    )?.element || null
+    )?.element || null;
+  if (activeContainer) return activeContainer;
+
+  const visibleItems = Array.from(
+    document.querySelectorAll(COMMENT_SELECTOR),
+  ).filter((element) => getViewportScore(element) !== null);
+  if (!visibleItems.length) return null;
+
+  const anchor = visibleItems.reduce((active, element) => {
+    const score = getViewportScore(element);
+    return !active || score > active.score ? { element, score } : active;
+  }, null)?.element;
+  if (!anchor) return null;
+
+  let fallback = anchor.parentElement;
+  while (fallback && fallback !== document.body) {
+    const itemCount = fallback.querySelectorAll(COMMENT_SELECTOR).length;
+    if (itemCount > 1) return fallback;
+    fallback = fallback.parentElement;
+  }
+
+  return anchor;
+}
+
+function findActivePost() {
+  return (
+    Array.from(document.querySelectorAll(POST_SELECTOR))
+      .map((element) => ({ element, score: getViewportScore(element) }))
+      .filter(({ score }) => score !== null)
+      .reduce(
+        (active, candidate) =>
+          !active || candidate.score > active.score ? candidate : active,
+        null,
+      )?.element || null
   );
 }
 
+function findFallbackCommentNodes(targetPost) {
+  const nodes = new Set();
+  targetPost.querySelectorAll("a[href*='/in/']").forEach((profileLink) => {
+    let current = profileLink;
+    for (let depth = 0; current && depth < 8; depth += 1) {
+      if (
+        (current.querySelector(BODY_SELECTOR) ||
+          current.querySelector(BODY_FALLBACK_SELECTOR)) &&
+        current.querySelector(NAME_SELECTORS)
+      ) {
+        nodes.add(current);
+        break;
+      }
+      current = current.parentElement;
+    }
+  });
+  return nodes;
+}
+
 function extractComment(commentNode) {
+  const authorNode = commentNode.querySelector(NAME_SELECTORS);
+  const fallbackAuthorNode = commentNode.querySelector("a[href*='/in/']");
   const authorName = cleanName(
-    commentNode.querySelector(NAME_SELECTORS)?.textContent || "",
+    authorNode?.textContent || fallbackAuthorNode?.textContent || "",
   );
   const bodyNode =
     commentNode.querySelector(BODY_SELECTOR) ||
@@ -101,12 +156,16 @@ function extractComment(commentNode) {
 }
 
 function scrapeComments() {
-  const targetContainer = findActiveCommentContainer();
+  const targetContainer = findActiveCommentContainer() || findActivePost();
   if (!targetContainer) return [];
 
   const seen = new Set();
   const leads = [];
   const comments = new Set(targetContainer.querySelectorAll(COMMENT_SELECTOR));
+  if (targetContainer.matches(COMMENT_SELECTOR)) comments.add(targetContainer);
+  findFallbackCommentNodes(targetContainer).forEach((commentNode) =>
+    comments.add(commentNode),
+  );
 
   comments.forEach((commentNode) => {
     const lead = extractComment(commentNode);

@@ -24,6 +24,19 @@ function isLinkedInUiNoise(value) {
   );
 }
 
+function hasCommenterName(value) {
+  return value.split(/\r?\n/).some((line) => {
+    const words = line.trim().split(/\s+/);
+    return (
+      words.length >= 2 &&
+      words.length <= 5 &&
+      /^[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+)+$/.test(
+        line.trim(),
+      )
+    );
+  });
+}
+
 async function sendLeads(payload) {
   setBusy(true);
   setStatus("Sending...");
@@ -117,6 +130,13 @@ manualSendButton.addEventListener("click", async () => {
   if (isLinkedInUiNoise(rawText)) {
     setStatus(
       "This is LinkedIn reply-interface text, not a commenter and comment. Copy the comment itself and try again.",
+      true,
+    );
+    return;
+  }
+  if (!hasCommenterName(rawText)) {
+    setStatus(
+      "Commenter name is missing. Copy the full LinkedIn comment, including the person's name, then try again.",
       true,
     );
     return;
