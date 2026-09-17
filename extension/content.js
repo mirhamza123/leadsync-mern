@@ -12,12 +12,18 @@ const SYSTEM_TEXT =
 const STANDALONE_LINK = /^(?:(?:https?:)?\/\/|www\.)\S+$/i;
 
 function cleanText(value = "") {
-  return value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function cleanName(value = "") {
   return cleanText(value)
-    .replace(/\s*[•|·]\s*(?:\d+(?:st|nd|rd|th)\+?|follow(?:ing)?|reply).*$/i, "")
+    .replace(
+      /\s*[•|·]\s*(?:\d+(?:st|nd|rd|th)\+?|follow(?:ing)?|reply).*$/i,
+      "",
+    )
     .replace(/\s+(?:follow(?:ing)?|reply)$/i, "")
     .trim();
 }
@@ -50,19 +56,21 @@ function findActiveCommentContainer() {
     if (score !== null) candidates.push({ element, score });
   });
 
-  const topLevelCandidates = candidates.filter(({ element }) =>
-    !candidates.some(
-      (candidate) =>
-        candidate.element !== element &&
-        candidate.element.contains(element),
-    ),
+  const topLevelCandidates = candidates.filter(
+    ({ element }) =>
+      !candidates.some(
+        (candidate) =>
+          candidate.element !== element && candidate.element.contains(element),
+      ),
   );
 
-  return topLevelCandidates.reduce(
-    (active, candidate) =>
-      !active || candidate.score > active.score ? candidate : active,
-    null,
-  )?.element || null;
+  return (
+    topLevelCandidates.reduce(
+      (active, candidate) =>
+        !active || candidate.score > active.score ? candidate : active,
+      null,
+    )?.element || null
+  );
 }
 
 function extractComment(commentNode) {
@@ -98,9 +106,7 @@ function scrapeComments() {
 
   const seen = new Set();
   const leads = [];
-  const comments = new Set(
-    targetContainer.querySelectorAll(COMMENT_SELECTOR),
-  );
+  const comments = new Set(targetContainer.querySelectorAll(COMMENT_SELECTOR));
 
   comments.forEach((commentNode) => {
     const lead = extractComment(commentNode);

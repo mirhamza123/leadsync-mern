@@ -20,8 +20,7 @@ function isLinkedInUiNoise(value) {
   return (
     /^(?:\d+\s+)?some replies may not be displayed.*see \d+ more replies$/i.test(
       normalized,
-    ) ||
-    /^(?:\d+|see \d+ more replies)$/i.test(normalized)
+    ) || /^(?:\d+|see \d+ more replies)$/i.test(normalized)
   );
 }
 
@@ -52,34 +51,30 @@ async function sendLeads(payload) {
 
 function requestPageComments(tabId, allowInjection = true) {
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(
-      tabId,
-      { action: "SCRAPE_PAGE" },
-      (response) => {
-        const messageError = chrome.runtime.lastError;
-        if (!messageError) {
-          resolve(response);
-          return;
-        }
+    chrome.tabs.sendMessage(tabId, { action: "SCRAPE_PAGE" }, (response) => {
+      const messageError = chrome.runtime.lastError;
+      if (!messageError) {
+        resolve(response);
+        return;
+      }
 
-        if (!allowInjection) {
-          reject(new Error(messageError.message));
-          return;
-        }
+      if (!allowInjection) {
+        reject(new Error(messageError.message));
+        return;
+      }
 
-        chrome.scripting.executeScript(
-          { target: { tabId }, files: ["content.js"] },
-          () => {
-            const injectionError = chrome.runtime.lastError;
-            if (injectionError) {
-              reject(new Error(injectionError.message));
-              return;
-            }
-            requestPageComments(tabId, false).then(resolve).catch(reject);
-          },
-        );
-      },
-    );
+      chrome.scripting.executeScript(
+        { target: { tabId }, files: ["content.js"] },
+        () => {
+          const injectionError = chrome.runtime.lastError;
+          if (injectionError) {
+            reject(new Error(injectionError.message));
+            return;
+          }
+          requestPageComments(tabId, false).then(resolve).catch(reject);
+        },
+      );
+    });
   });
 }
 

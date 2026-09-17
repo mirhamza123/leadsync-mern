@@ -100,7 +100,10 @@ function cleanAuthorName(line) {
     .replace(/^(?:view|go to)\s+/i, "")
     .replace(/['’]s\s+profile.*$/i, "")
     .replace(/\s*[,|]\s*open to work.*$/i, "")
-    .replace(/\s*[•·|]\s*(?:\d+(?:st|nd|rd|th)\+?|follow(?:ing)?|reply).*$/i, "")
+    .replace(
+      /\s*[•·|]\s*(?:\d+(?:st|nd|rd|th)\+?|follow(?:ing)?|reply).*$/i,
+      "",
+    )
     .replace(/\s+(?:open to work|follow(?:ing)?|reply)$/i, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -167,8 +170,13 @@ function parseLeadText(rawText = "") {
   const remaining = lines
     .slice(nameIndex + 1)
     .filter((line) => !isProfileMetadata(line) && !isNoiseLine(line))
-    .filter((line) => cleanAuthorName(line).toLowerCase() !== authorName.toLowerCase());
-  const text = cleanComment(remaining.length === 1 ? remaining : remaining.slice(1));
+    .filter(
+      (line) =>
+        cleanAuthorName(line).toLowerCase() !== authorName.toLowerCase(),
+    );
+  const text = cleanComment(
+    remaining.length === 1 ? remaining : remaining.slice(1),
+  );
   if (!text || isSpamComment(text)) return [];
 
   return [
