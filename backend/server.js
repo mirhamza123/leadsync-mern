@@ -22,9 +22,14 @@ app.get("/", (req, res) => {
 app.post("/api/leads/extract", async (req, res) => {
   try {
     const { structuredLeads, rawText } = req.body || {};
-    const parsedLeads = Array.isArray(structuredLeads)
+    const extractedLeads = Array.isArray(structuredLeads)
       ? structuredLeads
       : parseLeadText(typeof rawText === "string" ? rawText : "");
+    const parsedLeads = extractedLeads.map((lead) => ({
+      name: lead?.name || lead?.authorName || "",
+      headline: lead?.headline || lead?.title || "",
+      commentSnippet: lead?.commentSnippet || lead?.text || "",
+    }));
     const validLeads = parsedLeads.filter(
       (lead) => lead?.name?.trim() && lead?.commentSnippet?.trim(),
     );

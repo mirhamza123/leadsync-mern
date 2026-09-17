@@ -1,164 +1,117 @@
-const COMMENT_SELECTORS = [
-  ".comments-comment-item",
-  "article.comments-comment-item",
-  "div[data-id]",
-  ".comments-comment-entity",
-  ".comments-comment-item-content-body",
-  ".comments-post-meta",
-];
-
+const COMMENT_CONTAINER_SELECTOR =
+  ".comments-comments-list, .comments-comment-box, div.comments-comment-list__container";
+const COMMENT_SELECTOR =
+  ".comments-comment-item, article.comments-comment-item, div.comments-comment-entity";
+const NAME_SELECTORS =
+  ".comments-post-meta__name-text, .comments-comment-meta__description-title";
+const BODY_SELECTOR = ".comments-comment-item__main-content";
+const BODY_FALLBACK_SELECTOR =
+  "span.dir-ltr:not(.comments-post-meta__name-text):not(.comments-comment-meta__description-title)";
 const SYSTEM_TEXT =
-  /^(?:like|reply|follow|following|see more(?: comments)?|reactions?|key skills|note|premium|messaging)$/i;
+  /(?:follows? this page|commented on this|commented on|starting a new position|likes? this|shared this)/i;
+const STANDALONE_LINK = /^(?:(?:https?:)?\/\/|www\.)\S+$/i;
 
 function cleanText(value = "") {
-  return value.replace(/\s+/g, " ").trim();
+  return value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function cleanName(value = "") {
   return cleanText(value)
-    .replace(
-      /\s*[•|·]\s*(?:\d+(?:st|nd|rd|th)\+?|follow(?:ing)?|reply|1st|2nd|3rd).*$/i,
-      "",
-    )
+    .replace(/\s*[•|·]\s*(?:\d+(?:st|nd|rd|th)\+?|follow(?:ing)?|reply).*$/i, "")
     .replace(/\s+(?:follow(?:ing)?|reply)$/i, "")
     .trim();
 }
 
-function firstText(element, selectors) {
-  for (const selector of selectors) {
-    const value = cleanText(element.querySelector(selector)?.textContent || "");
-    if (value && !SYSTEM_TEXT.test(value)) return value;
-  }
-  return "";
-}
-
-function getProfileLink(element) {
-  return element?.matches?.("a[href*='/in/']")
-    ? element
-    : element?.querySelector("a[href*='/in/']");
-}
-
-function findContainer(profileLink) {
-  if (!profileLink) return null;
-  let current = profileLink;
-  for (let depth = 0; current && depth < 10; depth += 1) {
-    if (
-      current.matches?.(COMMENT_SELECTORS.join(",")) ||
-      current.querySelector?.(
-        ".comments-comment-item__main-content, .comments-comment-item-content-body, .comments-comment-entity, [data-test-id='comment-content'], span.dir-ltr",
-      )
-    ) {
-      return current;
-    }
-    current = current.parentElement;
-  }
-  return (
-    profileLink.closest("article, li, div[data-id]") ||
-    profileLink.parentElement
-  );
-}
-
-function extractLead(container) {
-  if (!container) return null;
-  const profileLink = getProfileLink(container);
-  if (!profileLink) return null;
-
-  const name = cleanName(
-    firstText(container, [
-      ".comments-post-meta__name-text",
-      ".comments-comment-item__post-meta .hoverable-link-text",
-      ".comments-comment-item__post-meta .t-14",
-      "a[href*='/in/'] span[aria-hidden='true']",
-      "a[href*='/in/']",
-    ]),
-  );
-
-  // Filter out system words & non-person single strings
-  if (!name || SYSTEM_TEXT.test(name) || name.length < 3) return null;
-
-  const headline = firstText(container, [
-    ".comments-post-meta__headline",
-    ".comments-comment-item__post-meta .comments-post-meta__headline",
-    ".comments-comment-item__post-meta .t-12",
-    ".comments-comment-meta__description-subtitle",
-  ]);
-
-  const commentNode = container.querySelector(
-    ".comments-comment-item__main-content, .comments-comment-item-content-body, .comments-comment-entity, [data-test-id='comment-content'], .feed-shared-text, span.dir-ltr",
-  );
-
-  const commentSnippet = cleanText(commentNode?.textContent || "");
+function getViewportScore(element) {
+  const rect = element.getBoundingClientRect();
   if (
-    !commentSnippet ||
-    SYSTEM_TEXT.test(commentSnippet) ||
-    commentSnippet.toLowerCase() === name.toLowerCase()
-  )
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    rect.bottom <= 0 ||
+    rect.top >= window.innerHeight
+  ) {
     return null;
+  }
 
-  return { name, headline, commentSnippet };
-}
-
-function extractFallbackLead(profileLink) {
-  const rawName = cleanName(profileLink.textContent || "");
-  if (!rawName || SYSTEM_TEXT.test(rawName) || rawName.length < 3) return null;
-
-  const container = findContainer(profileLink);
-  if (!container) return null;
-
-  const lines = (container.innerText || "")
-    .split(/\r?\n/)
-    .map(cleanText)
-    .filter((line) => line && line !== rawName && !SYSTEM_TEXT.test(line));
-
-  const meaningfulLines = lines.filter(
-    (line) =>
-      !/^\d+\s*(?:m|h|d|w|mo|y)(?:o)?$/i.test(line) && !line.includes("•"),
+  const visibleTop = Math.max(rect.top, 0);
+  const visibleBottom = Math.min(rect.bottom, window.innerHeight);
+  const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+  const centerDistance = Math.abs(
+    (rect.top + rect.bottom) / 2 - window.innerHeight / 2,
   );
 
-  if (!meaningfulLines.length) return null;
+  return visibleHeight * 2 - centerDistance;
+}
 
-  const headline = meaningfulLines.length > 1 ? meaningfulLines[0] : "";
-  const commentSnippet = meaningfulLines.slice(headline ? 1 : 0).join(" ");
-  if (!commentSnippet || SYSTEM_TEXT.test(commentSnippet)) return null;
+function findActiveCommentContainer() {
+  const candidates = [];
+  document.querySelectorAll(COMMENT_CONTAINER_SELECTOR).forEach((element) => {
+    const score = getViewportScore(element);
+    if (score !== null) candidates.push({ element, score });
+  });
 
-  return { name: rawName, headline, commentSnippet };
+  const topLevelCandidates = candidates.filter(({ element }) =>
+    !candidates.some(
+      (candidate) =>
+        candidate.element !== element &&
+        candidate.element.contains(element),
+    ),
+  );
+
+  return topLevelCandidates.reduce(
+    (active, candidate) =>
+      !active || candidate.score > active.score ? candidate : active,
+    null,
+  )?.element || null;
+}
+
+function extractComment(commentNode) {
+  const authorName = cleanName(
+    commentNode.querySelector(NAME_SELECTORS)?.textContent || "",
+  );
+  const bodyNode =
+    commentNode.querySelector(BODY_SELECTOR) ||
+    Array.from(commentNode.querySelectorAll(BODY_FALLBACK_SELECTOR)).find(
+      (node) =>
+        !node.closest(
+          ".comments-post-meta, .comments-comment-meta, .comments-comment-item__post-meta",
+        ),
+    );
+  const text = cleanText(bodyNode?.textContent || "");
+
+  if (
+    !authorName ||
+    !text ||
+    SYSTEM_TEXT.test(text) ||
+    SYSTEM_TEXT.test(authorName)
+  ) {
+    return null;
+  }
+  if (STANDALONE_LINK.test(text)) return null;
+
+  return { authorName, text };
 }
 
 function scrapeComments() {
-  const candidates = new Set();
-  COMMENT_SELECTORS.forEach((selector) =>
-    document
-      .querySelectorAll(selector)
-      .forEach((element) => candidates.add(element)),
+  const targetContainer = findActiveCommentContainer();
+  if (!targetContainer) return [];
+
+  const seen = new Set();
+  const leads = [];
+  const comments = new Set(
+    targetContainer.querySelectorAll(COMMENT_SELECTOR),
   );
 
-  const leads = [];
-
-  // Strategy 1: Primary container parsing
-  candidates.forEach((element) => {
-    const lead = extractLead(element);
-    if (lead) leads.push(lead);
+  comments.forEach((commentNode) => {
+    const lead = extractComment(commentNode);
+    if (!lead) return;
+    const key = `${lead.authorName.toLowerCase()}\u0000${lead.text.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    leads.push(lead);
   });
 
-  // Strategy 2: Scan every visible profile link because LinkedIn changes
-  // comment wrapper classes frequently.
-  const commentSectionLinks = document.querySelectorAll("a[href*='/in/']");
-
-  commentSectionLinks.forEach((profileLink) => {
-    const lead =
-      extractLead(findContainer(profileLink)) ||
-      extractFallbackLead(profileLink);
-    if (lead) leads.push(lead);
-  });
-
-  // Unique leads filtering by lowercased name
-  const uniqueLeads = new Map();
-  leads.forEach((lead) => {
-    const key = lead.name.toLowerCase();
-    if (!uniqueLeads.has(key)) uniqueLeads.set(key, lead);
-  });
-
-  return Array.from(uniqueLeads.values());
+  return leads;
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
